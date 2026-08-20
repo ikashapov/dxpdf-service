@@ -22,10 +22,10 @@ jobs:
       run:
         working-directory: dxpdf-service
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: dxpdf-service
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: nerdy-pro/dxpdf
           ref: ${{ env.DXPDF_REF }}
