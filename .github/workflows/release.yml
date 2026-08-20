@@ -1,0 +1,68 @@
+# Build the Windows binary and publish it as a GitHub Release.
+#
+# Trigger: push a tag `vX.Y.Z` (the tag must match Cargo.toml's version —
+# the guard step below fails the run on a mismatch).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  # dxpdf revision the release is built against — keep in sync with ci.yml.
+  DXPDF_REF: b2c017427a7be6f4b4d403d94f5525f6ca8fd91c
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: dxpdf-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dxpdf-service
+      - uses: actions/checkout@v4
+        with:
+          repository: nerdy-pro/dxpdf
+          ref: ${{ env.DXPDF_REF }}
+          path: dxpdf
+
+      - name: Check that the tag matches Cargo.toml
+        shell: pwsh
+        run: |
+          $cargo = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          if ($cargo -ne $tag) {
+            throw "Cargo.toml version $cargo does not match tag $tag"
+          }
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: dxpdf-service
+
+      - run: cargo test
+      - run: cargo build --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "dxpdf-service-${{ github.ref_name }}-windows-x86_64"
+          New-Item -ItemType Directory -Path pkg/$name | Out-Null
+          Copy-Item target/release/dxpdf-service.exe, README.md, README.ru.md pkg/$name/
+          Compress-Archive -Path pkg/$name -DestinationPath "pkg/$name.zip"
+          Get-FileHash "pkg/$name.zip" -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $name.zip" } |
+            Set-Content "pkg/$name.zip.sha256"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dxpdf-service/pkg/*.zip
+            dxpdf-service/pkg/*.sha256
+          generate_release_notes: true

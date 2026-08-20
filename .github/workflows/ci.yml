@@ -1,0 +1,67 @@
+# Build and test on every push/PR.
+#
+# The service depends on dxpdf via a path dependency (`../dxpdf`), so the
+# workflow checks the library out as a sibling directory at the pinned
+# revision below. Bump DXPDF_REF deliberately when moving to a newer dxpdf.
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  # dxpdf revision the service is built and tested against (v0.5.1 era).
+  DXPDF_REF: b2c017427a7be6f4b4d403d94f5525f6ca8fd91c
+
+jobs:
+  windows:
+    name: Windows (fmt, clippy, test, build)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: dxpdf-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dxpdf-service
+      - uses: actions/checkout@v4
+        with:
+          repository: nerdy-pro/dxpdf
+          ref: ${{ env.DXPDF_REF }}
+          path: dxpdf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: dxpdf-service
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: cargo build --release
+
+  # The console (`run`) mode is cross-platform; a Linux build keeps it that way.
+  linux:
+    name: Linux (test, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dxpdf-service
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dxpdf-service
+      - uses: actions/checkout@v4
+        with:
+          repository: nerdy-pro/dxpdf
+          ref: ${{ env.DXPDF_REF }}
+          path: dxpdf
+      # dxpdf's system dependencies on Linux.
+      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: dxpdf-service
+      - run: cargo test
+      - run: cargo build --release
