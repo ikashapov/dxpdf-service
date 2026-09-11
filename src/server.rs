@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use axum::body::Bytes;
@@ -31,14 +32,22 @@ pub struct ServerConfig {
 struct AppState {
     /// Caps how many CPU-bound conversions run at once; excess requests queue.
     convert_slots: Semaphore,
+    /// Labels each conversion in the log. A conversion can take the whole
+    /// process down from inside Skia's C++ (an access violation is not a
+    /// Rust panic and cannot be caught), and then the only evidence left is
+    /// the log: a `start` line with no matching `done` line names the request
+    /// that did it, and its size says which upload to re-test.
+    requests: AtomicU64,
 }
 
 pub fn build_router(config: &ServerConfig) -> Router {
     let state = Arc::new(AppState {
         convert_slots: Semaphore::new(config.concurrency.max(1)),
+        requests: AtomicU64::new(0),
     });
     Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/version", get(|| async { crate::LONG_VERSION }))
         .route("/convert", post(convert))
         .layer(DefaultBodyLimit::max(config.max_body_mb * 1024 * 1024))
         .with_state(state)
@@ -88,6 +97,13 @@ async fn convert(
     // Never rejects: the semaphore is not closed while the app runs.
     let _slot = state.convert_slots.acquire().await;
 
+    // Logged *before* the work, not only after it: a conversion that kills
+    // the process writes no completion line, and this is what then says which
+    // request was in flight when the process died.
+    let id = state.requests.fetch_add(1, Ordering::Relaxed) + 1;
+    let bytes = body.len();
+    log::info!("#{id} start: {bytes} bytes at {image_dpi} DPI");
+
     let started = std::time::Instant::now();
     let result = tokio::task::spawn_blocking(move || {
         let options = dxpdf::RenderOptions::default().with_image_dpi(image_dpi);
@@ -98,8 +114,7 @@ async fn convert(
     match result {
         Ok(Ok(pdf)) => {
             log::info!(
-                "converted {} DPI in {:?} -> {} bytes",
-                image_dpi,
+                "#{id} done: {bytes} bytes at {image_dpi} DPI in {:?} -> {} bytes of PDF",
                 started.elapsed(),
                 pdf.len()
             );
@@ -116,7 +131,7 @@ async fn convert(
                 .into_response()
         }
         Ok(Err(e)) => {
-            log::warn!("conversion failed: {e}");
+            log::warn!("#{id} failed after {:?}: {e}", started.elapsed());
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 format!("conversion failed: {e}"),
@@ -124,7 +139,7 @@ async fn convert(
                 .into_response()
         }
         Err(e) => {
-            log::error!("conversion task panicked: {e}");
+            log::error!("#{id} panicked after {:?}: {e}", started.elapsed());
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "internal error during conversion".to_string(),

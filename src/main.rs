@@ -17,10 +17,25 @@ use server::ServerConfig;
 pub const SERVICE_NAME: &str = "DxPdfService";
 pub const SERVICE_DISPLAY_NAME: &str = "dxpdf DOCX to PDF converter";
 
+/// The dxpdf build linked into this binary — version, repository, tag and the
+/// commit the tag resolved to, captured from `Cargo.lock` by `build.rs`.
+pub const ENGINE: &str = env!("DXPDF_ENGINE");
+
+/// What `--version` prints and what every run writes to its log as its first
+/// line. A crash report is only actionable if it names the build it came
+/// from, and "dxpdf-service 1.0.2" alone does not: the same service version
+/// can carry any engine.
+pub const LONG_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    "\nengine:  dxpdf ",
+    env!("DXPDF_ENGINE"),
+);
+
 #[derive(Parser)]
 #[command(
     name = "dxpdf-service",
     version,
+    long_version = LONG_VERSION,
     about = "HTTP DOCX->PDF conversion service"
 )]
 struct Cli {
@@ -100,6 +115,40 @@ enum Command {
     Uninstall,
 }
 
+/// Wraps the log file so each record is on disk before the next one is
+/// formatted.
+///
+/// A conversion can die inside Skia's C++ with an access violation, which no
+/// Rust handler can intercept and which takes any buffered log with it —
+/// hiding precisely the lines that say what the process was doing. Paying a
+/// flush per record is worth that; the log sees a few lines per request.
+struct FlushEachRecord(std::fs::File);
+
+impl std::io::Write for FlushEachRecord {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let written = self.0.write(buf)?;
+        self.0.flush()?;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
+/// The first line of every run, in the log the operator actually reads.
+///
+/// Windows names the faulting binary in its Application Error events, so the
+/// service version can be recovered from there — but never the engine, and a
+/// build without VERSIONINFO reports `0.0.0.0` even for its own version. One
+/// line here makes both unambiguous, whatever the event log says.
+fn log_identity() {
+    log::info!(
+        "dxpdf-service {} starting (engine: dxpdf {ENGINE})",
+        env!("CARGO_PKG_VERSION")
+    );
+}
+
 /// Initializes logging to stderr and, when given, a log file. Service mode has
 /// no console, so the file is the only place its logs go.
 fn init_logging(log_file: Option<&std::path::Path>) {
@@ -112,7 +161,7 @@ fn init_logging(log_file: Option<&std::path::Path>) {
             .open(path)
         {
             Ok(file) => {
-                builder.target(env_logger::Target::Pipe(Box::new(file)));
+                builder.target(env_logger::Target::Pipe(Box::new(FlushEachRecord(file))));
             }
             Err(e) => eprintln!("warning: cannot open log file {}: {e}", path.display()),
         }
@@ -125,6 +174,7 @@ fn main() {
     match cli.command {
         Command::Run(args) => {
             init_logging(args.log_file.as_deref());
+            log_identity();
             let config = args.config();
             let runtime = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
             let result = runtime.block_on(server::serve(config, async {
@@ -148,6 +198,7 @@ fn main() {
                         .map(|exe| exe.with_file_name("dxpdf-service.log"));
                 }
                 init_logging(args.log_file.as_deref());
+                log_identity();
                 if let Err(e) = winsvc::run(args) {
                     log::error!("service dispatcher failed: {e}");
                     std::process::exit(1);

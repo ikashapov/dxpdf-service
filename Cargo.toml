@@ -1,6 +1,6 @@
 [package]
 name = "dxpdf-service"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "HTTP service (Windows service) converting DOCX to PDF via dxpdf"
 license = "MIT"
@@ -23,6 +23,12 @@ env_logger = "0.11"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
+
+[target.'cfg(windows)'.build-dependencies]
+# Embeds VERSIONINFO into the exe. Without it Windows reports the faulting
+# application as `version: 0.0.0.0` in every Application Error event, so a
+# crash cannot be tied to the build that produced it.
+winresource = "0.1"
 
 [profile.release]
 # Match dxpdf's own release profile defaults; keep symbols small.

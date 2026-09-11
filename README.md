@@ -35,6 +35,7 @@ client ──POST /convert?image-dpi=N──▶ axum (tokio)
 |---|---|---|
 | `POST` | `/convert?image-dpi=300` | Request body — raw .docx bytes; response — `application/pdf` |
 | `GET` | `/health` | Liveness probe, answers `ok` |
+| `GET` | `/version` | Service version and the exact dxpdf build inside it |
 
 The `image-dpi` parameter (`image_dpi` is accepted too): target resolution
 for raster images embedded in the PDF. Range 1–2400, default 220 (matching
@@ -56,6 +57,63 @@ curl --data-binary @document.docx "http://192.168.1.33:8080/convert?image-dpi=30
 
 Prebuilt binaries are on the [Releases](../../releases) page (a zip with
 the exe is published by GitHub Actions on every `v*` tag).
+
+## Knowing which build you are running
+
+Three places name the build, because a crash report is only actionable if it
+can be tied to one:
+
+- **The log, first line of every run** —
+  `dxpdf-service 1.0.2 starting (engine: dxpdf 0.7.0 (https://github.com/ikashapov/dxpdf tag=service-2026-09-11 @ dc33157))`.
+  The engine identity comes from `Cargo.lock` at build time, so it names the
+  commit a tag resolved to, not just the tag (a tag can be moved).
+- **`GET /version`**, and `dxpdf-service.exe --version` — the same string.
+  (`-V` stays terse: just the service version.)
+- **Windows Application Error events** — the exe carries a VERSIONINFO
+  resource, so the event's `version:` field shows `1.0.2.0` rather than
+  `0.0.0.0`, and Explorer's *Properties → Details* shows the engine in
+  *Comments*. If the build host has no `rc.exe` on PATH the resource is
+  skipped with a `cargo:warning`, and the events go back to reporting zeros.
+
+## When the service crashes
+
+A conversion runs C++ (Skia) in-process. A Rust panic there is caught, logged
+as `#N panicked` and answered with `500`; a **native** fault — Windows
+exception `0xc0000005`, an access violation — is not catchable, and takes the
+whole process down with no Rust-level message. The signature is a log with a
+`#N start:` line and no matching `#N done`/`failed`/`panicked` line, plus an
+Application Error event at the same second.
+
+Work through it in this order — each step splits the problem in half:
+
+1. **Re-run the same document through the CLI on the same machine**
+   (`dxpdf.exe problem.docx -o out.pdf`). The CLI is the same engine with no
+   HTTP, no tokio and no concurrency. If it also dies, the service is not
+   involved at all and the reproduction is a one-liner to attach to a bug.
+2. **Check the Visual C++ runtime on the host.** The faulting module in the
+   event is often `MSVCP140.dll`; its `version:` field is the redistributable
+   actually installed. The exe links it dynamically, so a host whose redist
+   is years older than the toolset the exe was built with is a real
+   suspect — install the current *Microsoft Visual C++ 2015–2022
+   Redistributable (x64)* and retry before digging further.
+3. **Take concurrency out.** Reinstall with `--concurrency 1`: one conversion
+   at a time. If the crashes stop, the cause is parallel use of a shared
+   resource rather than the document itself.
+4. **Get a stack.** Have Windows Error Reporting keep a dump, then re-run:
+
+   ```bat
+   reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\dxpdf-service.exe" /v DumpFolder /t REG_EXPAND_SZ /d C:\dumps /f
+   reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\dxpdf-service.exe" /v DumpType /t REG_DWORD /d 2 /f
+   ```
+
+   The `.dmp` that appears in `C:\dumps` after the next crash carries the
+   faulting stack — open it in WinDbg or Visual Studio, or attach it to the
+   report.
+5. **Raise the log level** for the run that reproduces it:
+   `set RUST_LOG=debug`. dxpdf then logs its per-phase timing and the
+   resolution decision for every requested font family, so the last line
+   before the process dies names the phase — and, in the font phase, the
+   family — it died in.
 
 ## Which dxpdf this builds against
 
