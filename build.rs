@@ -7,7 +7,6 @@
 //! dxpdf was inside, so a crash report could not be tied to a build.
 
 use std::fs;
-use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-changed=Cargo.lock");
@@ -109,7 +108,5 @@ fn embed_windows_version_resource() {
 
 #[cfg(not(windows))]
 fn embed_windows_version_resource() {
-    // Nothing to do: only PE files carry VERSIONINFO. Referenced so the
-    // non-Windows build does not warn about the unused path.
-    let _ = Path::new("");
+    // Only PE files carry VERSIONINFO, so there is nothing to embed here.
 }
