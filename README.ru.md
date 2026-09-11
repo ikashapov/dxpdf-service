@@ -55,15 +55,53 @@ curl --data-binary @document.docx "http://192.168.1.33:8080/convert?image-dpi=30
 Готовые сборки — на странице
 [Releases](../../releases) (архив с exe публикуется GitHub Actions по тегу `v*`).
 
+## С какой версией dxpdf собирается
+
+`Cargo.toml` фиксирует движок **тегом git**, а не путём:
+
+```toml
+dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-09-11" }
+```
+
+Именно тегом, а не ветвью — иначе `cargo update` переразрешал бы ссылку и
+движок менялся бы незаметно. И git-зависимостью, а не `path = "../dxpdf"` —
+та папка переключается между фиче-ветками, и однажды сервис собрался с тем,
+что в ней оказалось выcheckout'ено.
+
+Теги `service-*` указывают на ветку `integration/*` форка: upstream
+`nerdy-pro/dxpdf` плюс ещё не влитые фиче-ветки. Так закрыты две вещи,
+важные в эксплуатации:
+
+- **паника `unreachable: caller only passes XML whitespace`** — уронила
+  21 конверсию в проде, исправлена в upstream v0.6.0;
+- **документы в формате Strict Open XML** (`<w:pgSz w:w="595.30pt"/>`) —
+  отвергались с *«expected an integer or decimal measurement»* до фикса
+  универсальных мер, который пока есть только в форке.
+
+Чтобы собрать только на upstream, замените строку на
+`{ git = "https://github.com/nerdy-pro/dxpdf", tag = "v0.7.0" }` — потеряете
+поддержку Strict-документов и невлитые фичи. Для локальной работы над
+движком годится `{ path = "../dxpdf" }`, но коммитить это не нужно.
+
+Обновление движка:
+
+```powershell
+cargo update -p dxpdf   # после правки тега в Cargo.toml
+cargo build --release
+```
+
 ## Сборка (на Windows)
 
 Нужны: rustup (MSVC toolchain) и VS Build Tools. `skia-safe` скачивает готовые
-бинарники Skia — clang/python не требуются.
+бинарники Skia — clang/python не требуются. Первая сборка скачивает движок и
+компилирует Skia — рассчитывайте на ~10 минут.
 
 ```powershell
 cd dxpdf-service
-cargo build --release   # рядом должна лежать папка ../dxpdf
+cargo build --release
 ```
+
+Папка `../dxpdf` больше не нужна — движок берётся из git.
 
 ## Установка / эксплуатация
 

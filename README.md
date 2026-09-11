@@ -57,15 +57,54 @@ curl --data-binary @document.docx "http://192.168.1.33:8080/convert?image-dpi=30
 Prebuilt binaries are on the [Releases](../../releases) page (a zip with
 the exe is published by GitHub Actions on every `v*` tag).
 
+## Which dxpdf this builds against
+
+`Cargo.toml` pins the engine by **git tag**, not by a path:
+
+```toml
+dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-09-11" }
+```
+
+A tag rather than a branch so the build is reproducible: a branch would be
+re-resolved on every `cargo update` and the service would silently change
+engines. A git dependency rather than `path = "../dxpdf"` because that
+checkout moves between feature branches, and the service was once built from
+whatever happened to be checked out there.
+
+`service-*` tags point at the fork's `integration/*` branch — upstream
+`nerdy-pro/dxpdf` plus the feature branches that have not been merged
+upstream yet. Two things that matter operationally were fixed this way:
+
+- **`unreachable: caller only passes XML whitespace`** — a panic that failed
+  21 conversions in production, fixed upstream in v0.6.0;
+- **Strict Open XML uploads** (`<w:pgSz w:w="595.30pt"/>`) — rejected with
+  *"expected an integer or decimal measurement"* until the universal-measure
+  parse landed on the fork.
+
+To build against upstream only, swap the line for
+`{ git = "https://github.com/nerdy-pro/dxpdf", tag = "v0.7.0" }` — you lose
+the Strict-document support and the unmerged features. For local engine work
+use `{ path = "../dxpdf" }`, but do not commit it.
+
+Bumping the engine:
+
+```powershell
+cargo update -p dxpdf   # after editing the tag in Cargo.toml
+cargo build --release
+```
+
 ## Building (on Windows)
 
 Requirements: rustup (MSVC toolchain) and VS Build Tools. `skia-safe`
-downloads prebuilt Skia binaries — clang/python are not needed.
+downloads prebuilt Skia binaries — clang/python are not needed. The first
+build fetches the engine and compiles Skia, so allow ~10 minutes.
 
 ```powershell
 cd dxpdf-service
-cargo build --release   # the ../dxpdf folder must sit next to this one
+cargo build --release
 ```
+
+The `../dxpdf` folder is no longer required — the engine comes from git.
 
 ## Install / operate
 

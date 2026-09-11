@@ -7,7 +7,13 @@ license = "MIT"
 publish = false
 
 [dependencies]
-dxpdf = { path = "../dxpdf" }
+# Pinned by tag, never by branch or path: a branch is re-resolved on every
+# `cargo update` (the engine would change silently) and `path = "../dxpdf"`
+# builds whatever that checkout happens to have switched to. `service-*` tags
+# point at the fork's integration branch — upstream plus the feature branches
+# not merged there yet, which is what carries Strict Open XML support. See
+# README.md ("Which dxpdf this builds against") before changing this line.
+dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-09-11" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
 clap = { version = "4", features = ["derive"] }
