@@ -1,6 +1,6 @@
 [package]
 name = "dxpdf-service"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 description = "HTTP service (Windows service) converting DOCX to PDF via dxpdf"
 license = "MIT"
