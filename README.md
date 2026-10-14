@@ -64,7 +64,7 @@ Three places name the build, because a crash report is only actionable if it
 can be tied to one:
 
 - **The log, first line of every run** —
-  `dxpdf-service 1.0.2 starting (engine: dxpdf 0.7.0 (https://github.com/ikashapov/dxpdf tag=service-2026-09-11 @ dc33157))`.
+  `dxpdf-service 1.0.3 starting (engine: dxpdf 0.8.1 (https://github.com/ikashapov/dxpdf tag=service-2026-10-14 @ ac5787e))`.
   The engine identity comes from `Cargo.lock` at build time, so it names the
   commit a tag resolved to, not just the tag (a tag can be moved).
 - **`GET /version`**, and `dxpdf-service.exe --version` — the same string.
@@ -120,7 +120,7 @@ Work through it in this order — each step splits the problem in half:
 `Cargo.toml` pins the engine by **git tag**, not by a path:
 
 ```toml
-dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-09-11" }
+dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-10-14" }
 ```
 
 A tag rather than a branch so the build is reproducible: a branch would be
@@ -137,10 +137,19 @@ upstream yet. Two things that matter operationally were fixed this way:
   21 conversions in production, fixed upstream in v0.6.0;
 - **Strict Open XML uploads** (`<w:pgSz w:w="595.30pt"/>`) — rejected with
   *"expected an integer or decimal measurement"* until the universal-measure
-  parse landed on the fork.
+  parse landed — now upstream, in v0.8.0.
+
+`service-2026-10-14` is upstream `3a5c7ca` (v0.8.1 plus the fixes merged up to
+22 September) with the six open fork PRs on top: WMF/SVG decoding (#183), page
+borders and the document grid (#184), SmartArt and charts (#185), Indic
+shaping (#186), tracked changes and comments (#187), and the five layout
+defects measured against Word 2024 — blank page after a bookmark-only
+paragraph, nested tables overflowing their cell, list counters split across
+`w:num` instances, table widths, column balancing (#252). Upstream has been
+quiet since 22 September; the tag carries everything that is waiting there.
 
 To build against upstream only, swap the line for
-`{ git = "https://github.com/nerdy-pro/dxpdf", tag = "v0.7.0" }` — you lose
+`{ git = "https://github.com/nerdy-pro/dxpdf", tag = "v0.8.1" }` — you lose
 the Strict-document support and the unmerged features. For local engine work
 use `{ path = "../dxpdf" }`, but do not commit it.
 
@@ -185,7 +194,16 @@ dxpdf-service.exe run --port 8091
 `install`/`run`/`service` flags: `--host` (0.0.0.0), `--port` (8080),
 `--max-body-mb` (100), `--concurrency` (0 = number of CPUs), `--log-file`
 (in service mode defaults to `dxpdf-service.log` next to the exe).
-Log level — the `RUST_LOG` variable (default `info`).
+Log level — the `RUST_LOG` variable. The default is `info,dxpdf::render::fonts=error`:
+`info` for the service and the engine, with the engine's font-substitution
+warnings off — on a server without the Office fonts every conversion logged a
+`[font] '…': no installed font and no substitute matched` line per missing
+family, 25 lines a request, and the fallback happens either way. To see them
+again — when a document looks wrong because of a substituted font — set
+(the same filter also mutes `dxpdf::docx::parse::vml::style`, which warns once
+per `mso-*` property Word writes into every text box)
+`RUST_LOG=info` (an explicit value replaces the whole default), or
+`RUST_LOG=debug` for everything including per-phase timing.
 
 If the service stops immediately with Event ID 7024 "Incorrect function"
 (service-specific error 1) — the HTTP server failed to start; almost always

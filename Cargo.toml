@@ -1,6 +1,6 @@
 [package]
 name = "dxpdf-service"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 description = "HTTP service (Windows service) converting DOCX to PDF via dxpdf"
 license = "MIT"
@@ -13,7 +13,7 @@ publish = false
 # point at the fork's integration branch — upstream plus the feature branches
 # not merged there yet, which is what carries Strict Open XML support. See
 # README.md ("Which dxpdf this builds against") before changing this line.
-dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-09-11" }
+dxpdf = { git = "https://github.com/ikashapov/dxpdf", tag = "service-2026-10-14" }
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync"] }
 clap = { version = "4", features = ["derive"] }

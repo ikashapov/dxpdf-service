@@ -21,6 +21,9 @@ pub const SERVICE_DISPLAY_NAME: &str = "dxpdf DOCX to PDF converter";
 /// commit the tag resolved to, captured from `Cargo.lock` by `build.rs`.
 pub const ENGINE: &str = env!("DXPDF_ENGINE");
 
+/// The log filter when `RUST_LOG` is unset — see `init_logging`.
+pub const DEFAULT_LOG_FILTER: &str = "info,dxpdf::render::fonts=error,dxpdf::docx::parse::vml::style=error";
+
 /// What `--version` prints and what every run writes to its log as its first
 /// line. A crash report is only actionable if it names the build it came
 /// from, and "dxpdf-service 1.0.2" alone does not: the same service version
@@ -153,7 +156,21 @@ fn log_identity() {
 /// no console, so the file is the only place its logs go.
 fn init_logging(log_file: Option<&std::path::Path>) {
     let mut builder =
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
+        // `info` for the service and the engine, but not the engine's font
+        // warnings: every document naming a family the host lacks logged a
+        // `[font] '…': no installed font and no substitute matched` line per
+        // family per conversion — 25 lines a request on a server without the
+        // Office fonts, drowning the one line per request this log is for.
+        // The fallback itself is unchanged; only its chatter is. The same
+        // for the VML style parser, which warns once per `mso-*` property
+        // Word writes into every text box — fifteen lines for one document,
+        // none of them something an operator can act on. An explicit
+        // `RUST_LOG` replaces the whole default, so `RUST_LOG=info` or
+        // `RUST_LOG=debug` brings the font lines back when a document looks
+        // wrong because of a substitution.
+        env_logger::Builder::from_env(
+            env_logger::Env::default().default_filter_or(DEFAULT_LOG_FILTER),
+        );
     if let Some(path) = log_file {
         match std::fs::OpenOptions::new()
             .create(true)
