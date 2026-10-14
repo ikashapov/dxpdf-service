@@ -1,7 +1,8 @@
 # Build the Windows binary and publish it as a GitHub Release.
 #
-# Trigger: push a tag `vX.Y.Z` (the tag must match Cargo.toml's version —
-# the guard step below fails the run on a mismatch).
+# Trigger: push a tag `vX.Y.Z`. Two guards fail the run early: the tag must
+# match Cargo.toml's version, and CHANGELOG.md must have a `## vX.Y.Z` section,
+# which becomes the release body.
 name: Release
 
 on:
@@ -31,6 +32,19 @@ jobs:
             throw "Cargo.toml version $cargo does not match tag $tag"
           }
 
+      - name: Take the release body from CHANGELOG.md
+        shell: bash
+        run: |
+          awk -v tag='${{ github.ref_name }}' '
+            $0 ~ "^## " tag "( |$)" { on = 1; next }
+            /^## /                   { on = 0 }
+            on                       { print }
+          ' CHANGELOG.md > release-body.md
+          if ! grep -q '[^[:space:]]' release-body.md; then
+            echo "CHANGELOG.md has no '## ${{ github.ref_name }}' section" >&2
+            exit 1
+          fi
+
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -53,7 +67,7 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: dxpdf-service/release-body.md
           files: |
             dxpdf-service/pkg/*.zip
             dxpdf-service/pkg/*.sha256
-          generate_release_notes: true

@@ -56,7 +56,10 @@ curl --data-binary @document.docx "http://192.168.1.33:8080/convert?image-dpi=30
 ```
 
 Prebuilt binaries are on the [Releases](../../releases) page (a zip with
-the exe is published by GitHub Actions on every `v*` tag).
+the exe is published by GitHub Actions on every `v*` tag). The release body is
+that tag's section of [CHANGELOG.md](CHANGELOG.md), and the workflow refuses a
+tag without one — so a release is: add the `## vX.Y.Z (date)` section, set
+`version` in `Cargo.toml`, push, then push the tag.
 
 ## Knowing which build you are running
 
