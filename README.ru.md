@@ -62,7 +62,7 @@ curl --data-binary @document.docx "http://192.168.1.33:8080/convert?image-dpi=30
 когда его можно привязать к конкретному бинарнику:
 
 - **Лог, первая строка каждого запуска** —
-  `dxpdf-service 1.0.3 starting (engine: dxpdf 0.8.1 (https://github.com/ikashapov/dxpdf tag=service-2026-10-14 @ ac5787e))`.
+  `dxpdf-service 1.0.4 starting (engine: dxpdf 0.8.1 (https://github.com/ikashapov/dxpdf tag=service-2026-10-14 @ 3637735))`.
   Идентичность движка берётся из `Cargo.lock` во время сборки, поэтому в ней
   стоит коммит, в который разрешился тег, а не только имя тега (тег можно
   передвинуть).

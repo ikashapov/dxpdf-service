@@ -22,7 +22,8 @@ pub const SERVICE_DISPLAY_NAME: &str = "dxpdf DOCX to PDF converter";
 pub const ENGINE: &str = env!("DXPDF_ENGINE");
 
 /// The log filter when `RUST_LOG` is unset — see `init_logging`.
-pub const DEFAULT_LOG_FILTER: &str = "info,dxpdf::render::fonts=error,dxpdf::docx::parse::vml::style=error";
+pub const DEFAULT_LOG_FILTER: &str =
+    "info,dxpdf::render::fonts=error,dxpdf::docx::parse::vml::style=error";
 
 /// What `--version` prints and what every run writes to its log as its first
 /// line. A crash report is only actionable if it names the build it came

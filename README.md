@@ -64,7 +64,7 @@ Three places name the build, because a crash report is only actionable if it
 can be tied to one:
 
 - **The log, first line of every run** —
-  `dxpdf-service 1.0.3 starting (engine: dxpdf 0.8.1 (https://github.com/ikashapov/dxpdf tag=service-2026-10-14 @ ac5787e))`.
+  `dxpdf-service 1.0.4 starting (engine: dxpdf 0.8.1 (https://github.com/ikashapov/dxpdf tag=service-2026-10-14 @ 3637735))`.
   The engine identity comes from `Cargo.lock` at build time, so it names the
   commit a tag resolved to, not just the tag (a tag can be moved).
 - **`GET /version`**, and `dxpdf-service.exe --version` — the same string.

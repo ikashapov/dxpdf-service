@@ -1,18 +1,14 @@
 # Build and test on every push/PR.
 #
-# The service depends on dxpdf via a path dependency (`../dxpdf`), so the
-# workflow checks the library out as a sibling directory at the pinned
-# revision below. Bump DXPDF_REF deliberately when moving to a newer dxpdf.
+# The engine is a git dependency pinned by tag in Cargo.toml (see README,
+# "Which dxpdf this builds against"); cargo fetches it, so nothing else is
+# checked out. Bumping the engine is editing that one line.
 name: CI
 
 on:
   push:
     branches: [master, main]
   pull_request:
-
-env:
-  # dxpdf revision the service is built and tested against (v0.5.1 era).
-  DXPDF_REF: b2c017427a7be6f4b4d403d94f5525f6ca8fd91c
 
 jobs:
   windows:
@@ -25,11 +21,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: dxpdf-service
-      - uses: actions/checkout@v6
-        with:
-          repository: nerdy-pro/dxpdf
-          ref: ${{ env.DXPDF_REF }}
-          path: dxpdf
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -52,11 +43,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: dxpdf-service
-      - uses: actions/checkout@v6
-        with:
-          repository: nerdy-pro/dxpdf
-          ref: ${{ env.DXPDF_REF }}
-          path: dxpdf
       # dxpdf's system dependencies on Linux.
       - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev
       - uses: dtolnay/rust-toolchain@stable

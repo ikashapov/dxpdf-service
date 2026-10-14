@@ -11,10 +11,6 @@ on:
 permissions:
   contents: write
 
-env:
-  # dxpdf revision the release is built against — keep in sync with ci.yml.
-  DXPDF_REF: b2c017427a7be6f4b4d403d94f5525f6ca8fd91c
-
 jobs:
   release:
     runs-on: windows-latest
@@ -25,11 +21,6 @@ jobs:
       - uses: actions/checkout@v6
         with:
           path: dxpdf-service
-      - uses: actions/checkout@v6
-        with:
-          repository: nerdy-pro/dxpdf
-          ref: ${{ env.DXPDF_REF }}
-          path: dxpdf
 
       - name: Check that the tag matches Cargo.toml
         shell: pwsh
